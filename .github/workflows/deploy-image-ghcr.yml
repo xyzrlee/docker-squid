@@ -1,0 +1,30 @@
+on:
+  push:
+  workflow_dispatch:
+
+
+env:
+  IMAGE_NAME: squid
+
+jobs:
+  build:
+    name: Deploy to ghcr.io
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+    - name: Checkout master
+      uses: actions/checkout@v2
+    - name: Build
+      run: |
+        chmod +x build.sh
+        ./build.sh
+    - name: Push image to GitHub - master
+      if: ${{ github.ref_name == 'master' }}
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login -u "${{ github.actor }}" --password-stdin ghcr.io
+        docker tag ${IMAGE_NAME} ghcr.io/${{github.repository_owner}}/${{env.IMAGE_NAME}}:latest
+        docker push ghcr.io/${{github.repository_owner}}/${{env.IMAGE_NAME}}:latest
