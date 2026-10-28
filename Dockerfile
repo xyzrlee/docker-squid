@@ -6,17 +6,29 @@ ARG SQUID_VERSION
 
 COPY entrypoint.sh /entrypoint.sh
 
-RUN apk update \
+RUN set -e \
+    && apk update \
     && echo "========== Available squid versions ==========" \
     && apk search -v 'squid' \
     && echo "==============================================" \
+    && if ! echo "${SQUID_VERSION}" | grep -q -- '-r'; then \
+         FULL_VERSION=$(apk search -v "squid-${SQUID_VERSION}" \
+           | sed 's/^squid-//' \
+           | sort -V \
+           | tail -1); \
+         if [ -z "${FULL_VERSION}" ]; then \
+           echo "Error: No package found for squid ${SQUID_VERSION}"; \
+           exit 1; \
+         fi; \
+         echo "Auto-resolved to latest: squid-${FULL_VERSION}"; \
+         SQUID_VERSION="${FULL_VERSION}"; \
+       fi \
     && apk add --no-cache squid=${SQUID_VERSION} su-exec \
     && echo "========== Squid version ==========" \
     && squid -v \
     && echo "========== OpenSSL support check ==========" \
     && squid -v | grep -q -i openssl \
     && echo "OpenSSL support: YES" \
-    || (echo "OpenSSL support: NO" && exit 1) \
     && echo "====================================" \
     && rm -rf \
         /var/cache/apk/* \
