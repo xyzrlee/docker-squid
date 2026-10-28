@@ -10,6 +10,8 @@ RUN set -e \
     && apk update \
     && echo "========== Available squid versions ==========" \
     && apk search -v 'squid' \
+    && echo "========== Available squid versions ==========" \
+    && apk search -e -v 'squid' \
     && echo "==============================================" \
     && if ! echo "${SQUID_VERSION}" | grep -q -- '-r'; then \
          FULL_VERSION=$(apk search -v "squid-${SQUID_VERSION}" \
