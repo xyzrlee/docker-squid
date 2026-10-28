@@ -9,23 +9,24 @@ COPY entrypoint.sh /entrypoint.sh
 RUN set -e \
     && apk update \
     && echo "========== Available squid versions ==========" \
-    && apk search -v 'squid' \
-    && echo "========== Available squid versions ==========" \
-    && apk search -e -v 'squid' \
+    && apk search -e -v squid \
     && echo "==============================================" \
     && if ! echo "${SQUID_VERSION}" | grep -q -- '-r'; then \
-         FULL_VERSION=$(apk search -v "squid-${SQUID_VERSION}" \
+         FULL_VERSION=$(apk search -e -v squid \
+           | awk -v ver="${SQUID_VERSION}" '$1 ~ "^squid-" ver "-r[0-9]+$" {print $1}' \
            | sed 's/^squid-//' \
            | sort -V \
            | tail -1); \
          if [ -z "${FULL_VERSION}" ]; then \
-           echo "Error: No package found for squid ${SQUID_VERSION}"; \
+           echo "Error: No package found matching squid ${SQUID_VERSION}"; \
+           echo "Available versions:"; \
+           apk search -e -v squid; \
            exit 1; \
          fi; \
-         echo "Auto-resolved to latest: squid-${FULL_VERSION}"; \
+         echo "Auto-resolved to latest: ${FULL_VERSION}"; \
          SQUID_VERSION="${FULL_VERSION}"; \
        fi \
-    && apk add --no-cache squid=${SQUID_VERSION} su-exec \
+    && apk add --no-cache "squid=${SQUID_VERSION}" su-exec \
     && echo "========== Squid version ==========" \
     && squid -v \
     && echo "========== OpenSSL support check ==========" \
