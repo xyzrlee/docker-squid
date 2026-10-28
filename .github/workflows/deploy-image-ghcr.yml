@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: squid
+  IMAGE_NAME: ${{ github.repository_owner }}/squid
 
 jobs:
   build-and-push:
