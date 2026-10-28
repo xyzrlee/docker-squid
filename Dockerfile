@@ -43,6 +43,9 @@ RUN set -e \
     && find /var/log -type f -exec truncate -s 0 {} \; \
     && mkdir -p /var/spool/squid /var/log/squid \
     && chown -R squid:squid /var/spool/squid /var/log/squid \
+    && mkdir -p /var/spool/squid /var/log/squid /var/run/squid \
+    && chown -R squid:squid /var/spool/squid /var/log/squid /var/run/squid \
+    && chmod 755 /var/run/squid
     && chmod +x /entrypoint.sh
 
 USER root
