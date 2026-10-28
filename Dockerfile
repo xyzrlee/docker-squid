@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp
-# 使用 GitHub Releases 下载
-RUN wget -q https://github.com/squid-cache/squid/releases/download/SQUID_${SQUID_VERSION//./_}/squid-${SQUID_VERSION}.tar.gz \
+
+RUN SQUID_TAG=$(echo "${SQUID_VERSION}" | tr '.' '_') \
+    && wget -q "https://github.com/squid-cache/squid/releases/download/SQUID_${SQUID_TAG}/squid-${SQUID_VERSION}.tar.gz" \
     && tar -xzf squid-${SQUID_VERSION}.tar.gz \
     && cd squid-${SQUID_VERSION} \
     && ./configure \
