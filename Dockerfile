@@ -1,42 +1,71 @@
-#
-# squid-openssl image for SSL bump.
-# CA material is supplied at runtime (see entrypoint.sh); it is not baked in.
-#
-FROM ubuntu:26.04
+ARG SQUID_VERSION
+ARG UBUNTU_VERSION=latest
 
-LABEL org.opencontainers.image.title="squid" \
-      org.opencontainers.image.description="Ubuntu squid-openssl with SSL-bump helpers" \
-      org.opencontainers.image.source="https://github.com/xyzrlee/docker-squid" \
-      org.opencontainers.image.licenses="MIT"
+FROM ubuntu:${UBUNTU_VERSION} AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    SQUID_CERT_DIR=/etc/squid/ssl_cert \
-    SQUID_DB_DIR=/var/lib/squid/ssl_db \
-    SQUID_CONF=/etc/squid/squid.conf \
-    SQUID_USER=proxy \
-    SQUID_GROUP=proxy
+ARG SQUID_VERSION
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        squid-openssl \
-        openssl \
-        ca-certificates \
-        gosu \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libssl-dev \
+    wget \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+# 使用 GitHub Releases 下载
+RUN wget -q https://github.com/squid-cache/squid/releases/download/SQUID_${SQUID_VERSION//./_}/squid-${SQUID_VERSION}.tar.gz \
+    && tar -xzf squid-${SQUID_VERSION}.tar.gz \
+    && cd squid-${SQUID_VERSION} \
+    && ./configure \
+        --prefix=/usr \
+        --sysconfdir=/etc/squid \
+        --localstatedir=/var \
+        --libexecdir=/usr/lib/squid \
+        --datadir=/usr/share/squid \
+        --with-openssl \
+        --enable-ssl-crtd \
+        --enable-security-cert-validators=fake \
+        --enable-storeio=ufs,aufs,diskd,rock \
+        --enable-removal-policies=lru,heap \
+        --enable-delay-pools \
+        --enable-cache-digests \
+        --enable-icap-client \
+        --enable-follow-x-forwarded-for \
+        --with-default-user=proxy \
+        --with-swapdir=/var/spool/squid \
+        --with-logdir=/var/log/squid \
+        --with-pidfile=/run/squid.pid \
+        --disable-translation \
+        --disable-arch-native \
+    && make -j$(nproc) \
+    && make install \
+    && strip /usr/sbin/squid /usr/lib/squid/* 2>/dev/null || true
+
+FROM ubuntu:${UBUNTU_VERSION}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && squid --version \
-    && mkdir -p "${SQUID_CERT_DIR}" "${SQUID_DB_DIR}" /var/log/squid /var/spool/squid \
-    && chown -R proxy:proxy \
-        "${SQUID_CERT_DIR}" \
-        "${SQUID_DB_DIR}" \
-        /var/log/squid \
-        /var/spool/squid \
-        /etc/squid \
-    && chmod 0750 "${SQUID_CERT_DIR}"
+    && apt-get clean \
+    && useradd -r -s /usr/sbin/nologin proxy 2>/dev/null || true
 
-COPY --chmod=0755 entrypoint.sh /entrypoint.sh
+COPY --from=builder /usr/sbin/squid /usr/sbin/squid
+COPY --from=builder /usr/lib/squid/security_file_certgen /usr/lib/squid/security_file_certgen
+COPY --from=builder /usr/share/squid /usr/share/squid
+COPY --from=builder /etc/squid /etc/squid
 
-# Squid answers cache manager on the HTTP port when running; keep the check cheap.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD squidclient -h 127.0.0.1 -p 3128 mgr:info >/dev/null 2>&1 || exit 1
+RUN mkdir -p /var/spool/squid /var/log/squid /run \
+    && chown -R proxy:proxy /var/spool/squid /var/log/squid /run /etc/squid \
+    && chmod 755 /usr/sbin/squid /usr/lib/squid/security_file_certgen
 
-ENTRYPOINT ["/entrypoint.sh"]
+USER proxy
+
+ENTRYPOINT ["squid"]
+CMD ["-f", "/etc/squid/squid.conf", "-NYC"]
+
