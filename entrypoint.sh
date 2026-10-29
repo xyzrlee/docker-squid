@@ -1,4 +1,6 @@
 #!/bin/sh
 
-exec squid "$@"
+squid -Nz
+
+squid "$@"
 
